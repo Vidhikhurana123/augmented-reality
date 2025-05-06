@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Stone Slab AR Experience</title>
+    <title>Markerless AR Table with Tap-to-Place & Texture Swap</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-ar-hit-test@1.0.0/dist/aframe-ar-hit-test.min.js"></script>
     <style>
         .texture-swap-buttons {
             position: fixed;
@@ -25,86 +26,65 @@
         .texture-button:hover {
             background-color: rgba(255, 255, 255, 1);
         }
-        .ar-button {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 999;
-            padding: 10px 20px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .ar-button:hover {
-            background-color: rgba(255, 255, 255, 1);
-        }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;">
-        <!-- Load the 3D model -->
+    <a-scene
+        webxr="optionalFeatures: hit-test;"
+        ar-hit-test="target:#counter; type:select;"
+        renderer="colorManagement: true;"
+        vr-mode-ui="enabled: false"
+        embedded
+        device-orientation-permission-ui="enabled: true"
+    >
+        <!-- The 3D model, initially hidden -->
         <a-entity
             id="counter"
-            position="0 0 -1"
-            rotation="0 0 0"
+            gltf-model="https://vidhikhurana.sirv.com/Images/base-table.glb?embed"
             scale="0.5 0.5 0.5"
-            gltf-model="https://vidhikhurana.sirv.com/Images/base-table.glb?embed">
-        </a-entity>
-        
-        <!-- Camera -->
-        <a-entity camera></a-entity>
+            visible="false"
+        ></a-entity>
+        <a-camera></a-camera>
     </a-scene>
 
-    <!-- Place model button -->
-    <button class="ar-button" onclick="placeModel()">Place Model</button>
-
     <!-- Texture swap buttons -->
-    <div class="texture-swap-buttons">
+    <div class="texture-swap-buttons" id="textureBtns" style="display:none;">
         <button class="texture-button" onclick="swapTexture('https://vidhikhurana.sirv.com/Images/stone1.jpg')">Stone 1</button>
         <button class="texture-button" onclick="swapTexture('https://vidhikhurana.sirv.com/Images/Stone2.png')">Stone 2</button>
     </div>
 
     <script>
-        let isModelPlaced = false;
+        const model = document.getElementById('counter');
+        const textureBtns = document.getElementById('textureBtns');
 
-        function placeModel() {
-            const counter = document.querySelector('#counter');
-            if (!isModelPlaced) {
-                // Get camera position
-                const camera = document.querySelector('[camera]');
-                const cameraPosition = camera.getAttribute('position');
-                const cameraRotation = camera.getAttribute('rotation');
-                
-                // Place model in front of camera
-                counter.setAttribute('position', {
-                    x: cameraPosition.x,
-                    y: cameraPosition.y,
-                    z: cameraPosition.z - 1
-                });
-                counter.setAttribute('rotation', {
-                    x: 0,
-                    y: cameraRotation.y,
-                    z: 0
-                });
-                isModelPlaced = true;
+        // Show model and texture buttons when AR session starts
+        document.querySelector('a-scene').addEventListener('loaded', () => {
+            document.querySelector('a-scene').renderer.xr.addEventListener('sessionstart', () => {
+                model.setAttribute('visible', true);
+                textureBtns.style.display = 'flex';
+            });
+        });
+
+        // Texture swap function
+        window.swapTexture = function(texturePath) {
+            // Wait for model to load
+            if (!model.getObject3D('mesh')) {
+                model.addEventListener('model-loaded', () => swapTexture(texturePath));
+                return;
             }
-        }
-
-        function swapTexture(texturePath) {
-            const counter = document.querySelector('#counter');
-            const material = counter.getObject3D('mesh').children[0].material;
-            
-            // Create new texture
-            const texture = new THREE.TextureLoader().load(texturePath);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            
-            // Apply new texture
-            material.map = texture;
-            material.needsUpdate = true;
-        }
+            // Traverse all meshes and update their material map
+            model.getObject3D('mesh').traverse((node) => {
+                if (node.isMesh && node.material) {
+                    const loader = new THREE.TextureLoader();
+                    loader.load(texturePath, (texture) => {
+                        texture.wrapS = THREE.RepeatWrapping;
+                        texture.wrapT = THREE.RepeatWrapping;
+                        node.material.map = texture;
+                        node.material.needsUpdate = true;
+                    });
+                }
+            });
+        };
     </script>
 </body>
 </html>
